@@ -66,15 +66,20 @@ class S3WriteFile::Impl {
 
     // Create bucket if not present.
     {
-      Aws::S3::Model::HeadBucketRequest request;
-      request.SetBucket(awsString(bucket_));
-      auto bucketMetadata = client_->HeadBucket(request);
-      if (!bucketMetadata.IsSuccess()) {
-        Aws::S3::Model::CreateBucketRequest request;
-        request.SetBucket(bucket_);
-        auto outcome = client_->CreateBucket(request);
-        VELOX_CHECK_AWS_OUTCOME(
-            outcome, "Failed to create S3 bucket", bucket_, "");
+      bool isArn = bucket_.rfind("arn:aws:s3", 0) == 0;
+      // Only create bucket if it's a normal bucket, not an ARN
+      if (!isArn) {
+        Aws::S3::Model::HeadBucketRequest request;
+        request.SetBucket(awsString(bucket_));
+        auto bucketMetadata = client_->HeadBucket(request);
+
+        if (!bucketMetadata.IsSuccess()) {
+          Aws::S3::Model::CreateBucketRequest createRequest;
+          createRequest.SetBucket(bucket_);
+          auto outcome = client_->CreateBucket(createRequest);
+          VELOX_CHECK_AWS_OUTCOME(
+              outcome, "Failed to create S3 bucket", bucket_, "");
+        }
       }
     }
 
@@ -89,10 +94,17 @@ class S3WriteFile::Impl {
       /// (https://github.com/apache/arrow/issues/11934). So we instead default
       /// to application/octet-stream which is less misleading.
       request.SetContentType(kApplicationOctetStream);
-      // The default algorithm used is MD5. However, MD5 is not supported with
-      // fips and can cause a SIGSEGV. Set CRC32 instead which is a standard for
-      // checksum computation and is not restricted by fips.
-      request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
+
+      // Detect MRAP ARN
+      bool isArn = bucket_.rfind("arn:aws:s3", 0) == 0;
+
+      if (!isArn) {
+        // The default algorithm used is MD5. However, MD5 is not supported with
+        // fips and can cause a SIGSEGV. Set CRC32 instead which is a standard for
+        // checksum computation and is not restricted by fips.
+        // Normal S3 bucket: use CRC32
+        request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
+      }
 
       auto outcome = client_->CreateMultipartUpload(request);
       VELOX_CHECK_AWS_OUTCOME(
@@ -216,7 +228,11 @@ class S3WriteFile::Impl {
       // The default algorithm used is MD5. However, MD5 is not supported with
       // fips and can cause a SIGSEGV. Set CRC32 instead which is a standard for
       // checksum computation and is not restricted by fips.
-      request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
+      // Only set checksum if not MRAP
+      bool isArn = bucket_.rfind("arn:aws:s3", 0) == 0;
+      if (!isArn) {
+        request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
+      }
       auto outcome = client_->UploadPart(request);
       VELOX_CHECK_AWS_OUTCOME(outcome, "Failed to upload", bucket_, key_);
       // Append ETag and part number for this uploaded part.

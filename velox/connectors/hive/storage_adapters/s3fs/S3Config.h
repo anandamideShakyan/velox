@@ -76,6 +76,7 @@ class S3Config {
     kRetryMode,
     kUseProxyFromEnv,
     kCredentialsProvider,
+    kMrapArn,
     kEnd
   };
 
@@ -112,6 +113,8 @@ class S3Config {
             {Keys::kRetryMode, std::make_pair("retry-mode", std::nullopt)},
             {Keys::kUseProxyFromEnv,
              std::make_pair("use-proxy-from-env", "false")},
+            {Keys::kMrapArn,
+             std::make_pair("mrap-arn", std::nullopt)},
             {Keys::kCredentialsProvider,
              std::make_pair("aws-credentials-provider", std::nullopt)},
         };
@@ -229,6 +232,10 @@ class S3Config {
   bool useProxyFromEnv() const {
     auto value = config_.find(Keys::kUseProxyFromEnv)->second.value();
     return folly::to<bool>(value);
+  }
+
+  std::optional<std::string> mrapArn() const {
+    return config_.find(Keys::kMrapArn)->second;
   }
 
   std::string payloadSigningPolicy() const {

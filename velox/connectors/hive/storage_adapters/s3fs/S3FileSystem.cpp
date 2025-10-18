@@ -287,8 +287,14 @@ class S3FileSystem::Impl {
     if (retryStrategy.has_value()) {
       clientConfig.retryStrategy = retryStrategy.value();
     }
+    // Use MRAP ARN if present, else normal bucket
+    std::string bucketOrArn = s3Config.mrapArn().has_value() ?
+                              s3Config.mrapArn().value() :
+                              s3Config.bucket();
 
-    clientConfig.useVirtualAddressing = s3Config.useVirtualAddressing();
+    // Force virtual addressing for ARNs/MRAPs
+    bool isArn = bucketOrArn.rfind("arn:aws:s3", 0) == 0;
+    clientConfig.useVirtualAddressing = isArn || s3Config.useVirtualAddressing();
     clientConfig.payloadSigningPolicy =
         inferPayloadSign(s3Config.payloadSigningPolicy());
 
