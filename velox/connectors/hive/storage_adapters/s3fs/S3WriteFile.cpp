@@ -38,11 +38,12 @@ class S3WriteFile::Impl {
   explicit Impl(
       std::string_view path,
       Aws::S3::S3Client* client,
-      memory::MemoryPool* pool)
+      memory::MemoryPool* pool,
+      const std::optional<std::string>& mrapPath)
       : client_(client), pool_(pool) {
     VELOX_CHECK_NOT_NULL(client);
     VELOX_CHECK_NOT_NULL(pool);
-    getBucketAndKeyFromPath(path, bucket_, key_);
+    getBucketAndKeyFromPath(path, bucket_, key_, mrapPath);
     currentPart_ = std::make_unique<dwio::common::DataBuffer<char>>(*pool_);
     currentPart_->reserve(kPartUploadSize);
     // Check that the object doesn't exist, if it does throw an error.
@@ -262,8 +263,8 @@ class S3WriteFile::Impl {
 S3WriteFile::S3WriteFile(
     std::string_view path,
     Aws::S3::S3Client* client,
-    memory::MemoryPool* pool) {
-  impl_ = std::make_shared<Impl>(path, client, pool);
+    memory::MemoryPool* pool, const std::optional<std::string>& mrapPath) {
+  impl_ = std::make_shared<Impl>(path, client, pool, mrapPath);
 }
 
 void S3WriteFile::append(std::string_view data) {

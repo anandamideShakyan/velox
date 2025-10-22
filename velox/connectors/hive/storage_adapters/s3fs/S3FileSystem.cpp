@@ -287,14 +287,16 @@ class S3FileSystem::Impl {
     if (retryStrategy.has_value()) {
       clientConfig.retryStrategy = retryStrategy.value();
     }
-    // Use MRAP ARN if present, else normal bucket
-    std::string bucketOrArn = s3Config.mrapArn().has_value() ?
-                              s3Config.mrapArn().value() :
-                              s3Config.bucket();
 
-    // Force virtual addressing for ARNs/MRAPs
-    bool isArn = bucketOrArn.rfind("arn:aws:s3", 0) == 0;
-    clientConfig.useVirtualAddressing = isArn || s3Config.useVirtualAddressing();
+    if(s3Config.mrapEnabled().value() == "true") {
+      clientConfig.useVirtualAddressing = true;
+      std::string mrapPath = fmt::format(
+      "arn:aws:s3::{}:accesspoint",
+      s3Config.accountId().value());
+      mrapPath_ = make_optional(mrapPath);
+    }
+    else
+      clientConfig.useVirtualAddressing = s3Config.useVirtualAddressing();
     clientConfig.payloadSigningPolicy =
         inferPayloadSign(s3Config.payloadSigningPolicy());
 
@@ -447,8 +449,13 @@ class S3FileSystem::Impl {
     return getAwsInstance()->getLogPrefix();
   }
 
+  std::optional<std::string> getMrapPath() const {
+    return mrapPath_;
+  }
+
  private:
   std::shared_ptr<Aws::S3::S3Client> client_;
+  std::optional<std::string> mrapPath_;
 };
 
 S3FileSystem::S3FileSystem(
@@ -471,7 +478,7 @@ std::unique_ptr<ReadFile> S3FileSystem::openFileForRead(
     std::string_view s3Path,
     const FileOptions& options) {
   const auto path = getPath(s3Path);
-  auto s3file = std::make_unique<S3ReadFile>(path, impl_->s3Client());
+  auto s3file = std::make_unique<S3ReadFile>(path, impl_->s3Client(), impl_->getMrapPath());
   s3file->initialize(options);
   return s3file;
 }
@@ -481,7 +488,7 @@ std::unique_ptr<WriteFile> S3FileSystem::openFileForWrite(
     const FileOptions& options) {
   const auto path = getPath(s3Path);
   auto s3file =
-      std::make_unique<S3WriteFile>(path, impl_->s3Client(), options.pool);
+      std::make_unique<S3WriteFile>(path, impl_->s3Client(), options.pool, impl_->getMrapPath());
   return s3file;
 }
 
@@ -492,7 +499,7 @@ std::string S3FileSystem::name() const {
 std::vector<std::string> S3FileSystem::list(std::string_view path) {
   std::string bucket;
   std::string key;
-  getBucketAndKeyFromPath(getPath(path), bucket, key);
+  getBucketAndKeyFromPath(getPath(path), bucket, key, impl_->getMrapPath());
 
   Aws::S3::Model::ListObjectsRequest request;
   request.SetBucket(awsString(bucket));
@@ -514,7 +521,7 @@ std::vector<std::string> S3FileSystem::list(std::string_view path) {
 bool S3FileSystem::exists(std::string_view path) {
   std::string bucket;
   std::string key;
-  getBucketAndKeyFromPath(getPath(path), bucket, key);
+  getBucketAndKeyFromPath(getPath(path), bucket, key, impl_->getMrapPath());
 
   Aws::S3::Model::HeadObjectRequest request;
   request.SetBucket(awsString(bucket));
@@ -528,7 +535,7 @@ void S3FileSystem::mkdir(
     const DirectoryOptions& options) {
   std::string bucket;
   std::string key;
-  getBucketAndKeyFromPath(getPath(path), bucket, key);
+  getBucketAndKeyFromPath(getPath(path), bucket, key, impl_->getMrapPath());
 
   Aws::S3::Model::PutObjectRequest request;
   request.SetBucket(awsString(bucket));
@@ -547,11 +554,11 @@ void S3FileSystem::rename(
     bool overWrite) {
   std::string sourceBucket;
   std::string sourceKey;
-  getBucketAndKeyFromPath(getPath(path), sourceBucket, sourceKey);
+  getBucketAndKeyFromPath(getPath(path), sourceBucket, sourceKey, impl_->getMrapPath());
 
   std::string targetBucket;
   std::string targetKey;
-  getBucketAndKeyFromPath(getPath(newPath), targetBucket, targetKey);
+  getBucketAndKeyFromPath(getPath(newPath), targetBucket, targetKey, impl_->getMrapPath());
 
   // Copies the object to the new location.
   Aws::S3::Model::CopyObjectRequest copyRequest;

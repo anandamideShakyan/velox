@@ -50,7 +50,8 @@ class S3WriteFile : public WriteFile {
   S3WriteFile(
       std::string_view path,
       Aws::S3::S3Client* client,
-      memory::MemoryPool* pool);
+      memory::MemoryPool* pool,
+      const std::optional<std::string>& mrapPath);
 
   /// Appends data to the end of the file.
   /// Uploads a part on reaching part size limit.

@@ -76,7 +76,9 @@ class S3Config {
     kRetryMode,
     kUseProxyFromEnv,
     kCredentialsProvider,
-    kMrapArn,
+    // kMrapArn,
+    kAccountId,
+    kMrapEnabled,
     kEnd
   };
 
@@ -113,8 +115,12 @@ class S3Config {
             {Keys::kRetryMode, std::make_pair("retry-mode", std::nullopt)},
             {Keys::kUseProxyFromEnv,
              std::make_pair("use-proxy-from-env", "false")},
-            {Keys::kMrapArn,
-             std::make_pair("mrap-arn", std::nullopt)},
+            // {Keys::kMrapArn,
+            //  std::make_pair("mrap-arn", std::nullopt)},
+            {Keys::kAccountId,
+            std::make_pair("account-id", std::nullopt)},
+            {Keys::kMrapEnabled,
+            std::make_pair("mrap-enabled", "false")},
             {Keys::kCredentialsProvider,
              std::make_pair("aws-credentials-provider", std::nullopt)},
         };
@@ -234,8 +240,16 @@ class S3Config {
     return folly::to<bool>(value);
   }
 
-  std::optional<std::string> mrapArn() const {
-    return config_.find(Keys::kMrapArn)->second;
+  // std::optional<std::string> mrapArn() const {
+  //   return config_.find(Keys::kMrapArn)->second;
+  // }
+
+  std::optional<std::string> accountId() const {
+    return config_.find(Keys::kAccountId)->second;
+  }
+
+  std::optional<std::string> mrapEnabled() const {
+    return config_.find(Keys::kMrapEnabled)->second;
   }
 
   std::string payloadSigningPolicy() const {

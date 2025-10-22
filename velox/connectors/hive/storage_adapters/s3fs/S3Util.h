@@ -86,10 +86,14 @@ inline bool isS3File(const std::string_view filename) {
 inline void getBucketAndKeyFromPath(
     std::string_view path,
     std::string& bucket,
-    std::string& key) {
+    std::string& key,
+    const std::optional<std::string>& mrapArn = std::nullopt) {
   auto firstSep = path.find_first_of(kSep);
   bucket = path.substr(0, firstSep);
   key = path.substr(firstSep + 1);
+  if(mrapArn && !mrapArn->empty()) {
+    bucket = fmt::format("{}:{}",mrapArn.value(), bucket);
+  }
 }
 
 // TODO: Correctness check for bucket name.
